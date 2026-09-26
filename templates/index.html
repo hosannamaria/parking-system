@@ -13,7 +13,8 @@
   .stat { background: #1e293b; padding: 12px 24px; border-radius: 10px; font-size: 18px; }
   .stat b { color: #4ade80; }
   #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; max-width: 900px; margin: 0 auto 24px; }
-  .slot { padding: 14px 6px; text-align: center; border-radius: 8px; font-weight: bold; cursor: default; transition: .2s; }
+  .plate { font-size: 11px; letter-spacing: .5px; display: inline-block; margin-top: 2px; }
+  .slot { padding: 10px 4px; text-align: center; border-radius: 8px; font-weight: bold; cursor: default; transition: .2s; }
   .free { background: #14532d; border: 2px solid #22c55e; }
   .occ  { background: #7f1d1d; border: 2px solid #ef4444; color: #fecaca; }
   .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; max-width: 1100px; margin: 0 auto; }
@@ -65,7 +66,8 @@
   <div class="card">
     <h2>4. Daily Report</h2>
     <input id="r_date" type="date">
-    <button onclick="report()">Generate</button>
+    <button onclick="report()">Generate Summary</button>
+    <button onclick="vehicles()" style="background:#16a34a">Full Vehicle Report (plates, types, fees)</button>
     <div id="report_out"></div>
   </div>
 </div>
@@ -84,7 +86,7 @@ async function refresh() {
   document.getElementById('occ').textContent = 40 - d.free;
   document.getElementById('queue').textContent = d.waiting.length;
   document.getElementById('grid').innerHTML = d.slots.map(s =>
-    `<div class="slot ${s.occupied ? 'occ' : 'free'}">S${String(s.slot).padStart(2,'0')}<br>${s.occupied ? '&#10060;' : '&#9989;'}</div>`).join('');
+    `<div class="slot ${s.occupied ? 'occ' : 'free'}"><b>S${String(s.slot).padStart(2,'0')}</b><br>${s.occupied ? `<span class="plate">${s.plate}</span>` : '&#9989;'}</div>`).join('');
 }
 async function arrive() {
   const plate = document.getElementById('a_plate').value;
@@ -132,6 +134,17 @@ async function report() {
   const r = await fetch('/api/report/' + date); const d = await r.json();
   document.getElementById('report_out').innerHTML =
     `<p>Vehicles: <b>${d.vehicles}</b></p><p>Revenue: <b style="color:#4ade80">KES ${d.revenue}</b></p>`;
+}async function vehicles() {
+  const date = document.getElementById('r_date').value;
+  if (!date) { log('Pick a date first', 'err'); return; }
+  const r = await fetch('/api/vehicles/' + date); const d = await r.json();
+  if (!d.vehicles.length) { document.getElementById('report_out').innerHTML = '<p>No vehicles recorded on this date</p>'; return; }
+  const rows = d.vehicles.map(t =>
+    `<tr><td><b>${t.plate}</b></td><td>${t.vehicle_type || '-'}</td><td>${t.slot_no}</td><td>${t.entry_time || ''}</td><td>${t.exit_time || '-'}</td><td>${t.fee_paid || 0}</td><td>${t.status}</td></tr>`).join('');
+  document.getElementById('report_out').innerHTML =
+    `<table><tr><th>Plate</th><th>Type</th><th>Slot</th><th>Entry</th><th>Exit</th><th>Fee (KES)</th><th>Status</th></tr>${rows}</table>
+     <p style="margin-top:8px">Total revenue: <b style="color:#4ade80">KES ${d.total_revenue}</b></p>`;
+  log(`Vehicle report generated for ${date}: ${d.vehicles.length} vehicle(s)`, 'ok');
 }
 refresh();
 setInterval(refresh, 5000);   // auto-refresh slot grid every 5s

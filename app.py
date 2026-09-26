@@ -58,8 +58,12 @@ WAITING = deque()   # FIFO entrance queue (Module: overflow handling)
 # MODULE 1: SLOT DISPLAY
 # =====================================================================
 def slot_status():
-    occ = ALLOC.occupied()
-    return [{"slot": i, "occupied": i in occ} for i in range(1, TOTAL_SLOTS + 1)]
+    conn = db()
+    rows = conn.execute("SELECT slot_no, plate FROM tickets WHERE status='ACTIVE'").fetchall()
+    conn.close()
+    plates = {r["slot_no"]: r["plate"] for r in rows}
+    return [{"slot": i, "occupied": i in plates, "plate": plates.get(i, "")}
+            for i in range(1, TOTAL_SLOTS + 1)]
 
 # =====================================================================
 # MODULE 2: VEHICLE ENTRY
@@ -209,6 +213,18 @@ def api_quote(plate):
 @app.route("/api/search/<plate>")
 def api_search(plate):
     return jsonify({"tickets": search(plate)})
+
+@app.route("/api/vehicles/<date>")
+def api_vehicles(date):
+    """Full report: every vehicle (plate, type, fee) parked on a given date."""
+    conn = db()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT plate, vehicle_type, slot_no, entry_time, exit_time, fee_paid, status"
+        " FROM tickets WHERE entry_time LIKE ? ORDER BY entry_time",
+        (date + "%",))]
+    conn.close()
+    total = sum(r["fee_paid"] for r in rows if r["status"] == "CLOSED")
+    return jsonify({"date": date, "vehicles": rows, "total_revenue": total})
 
 @app.route("/api/report/<date>")
 def api_report(date):
