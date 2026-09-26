@@ -50,9 +50,11 @@
   <div class="card">
     <h2>2. Vehicle Departure &amp; Payment</h2>
     <input id="d_plate" placeholder="Number plate">
+    <button onclick="quote()">&#128181; Calculate Fee Automatically</button>
+    <div id="quote_out"></div>
     <input id="d_paid" type="number" placeholder="Amount paid (KES)">
     <select id="d_method"><option>M-Pesa</option><option>Cash</option><option>Card</option></select>
-    <button onclick="depart()">Calculate Fee &amp; Exit</button>
+    <button onclick="depart()">Confirm Payment &amp; Open Barrier</button>
   </div>
   <div class="card">
     <h2>3. Search Records</h2>
@@ -93,6 +95,18 @@ async function arrive() {
   if (d.error) { log(d.error, 'err'); return; }
   d.queued ? log(d.message, 'err') : log(`${plate.toUpperCase()} -> Slot ${d.slot} | ${d.barrier}`, 'ok');
   refresh();
+}
+async function quote() {
+  const plate = document.getElementById('d_plate').value.trim();
+  if (!plate) { log('Enter a plate number first', 'err'); return; }
+  const r = await fetch('/api/quote/' + encodeURIComponent(plate));
+  const d = await r.json();
+  if (d.error) { document.getElementById('quote_out').innerHTML = `<p style="color:#f87171">${d.error}</p>`; log(d.error, 'err'); return; }
+  document.getElementById('quote_out').innerHTML =
+    `<p style="color:#38bdf8">&#9200; Parked: <b>${d.duration}</b> (since ${d.entry_time})</p>
+     <p style="color:#4ade80;font-size:20px">&#128181; AMOUNT DUE: <b>KES ${d.fee}</b></p>`;
+  document.getElementById('d_paid').value = d.fee;
+  log(`Fee quote for ${d.plate}: ${d.duration} -> KES ${d.fee} (auto-filled)`, 'info');
 }
 async function depart() {
   const plate = document.getElementById('d_plate').value;

@@ -192,6 +192,20 @@ def api_departure():
                     "fee": amount, "paid": paid, "change": change,
                     "method": method, "barrier": msg})
 
+@app.route("/api/quote/<plate>")
+def api_quote(plate):
+    """Automatic fee quote: duration + amount due, WITHOUT closing the ticket."""
+    conn = db()
+    t = conn.execute("SELECT * FROM tickets WHERE plate=? AND status='ACTIVE'",
+                     (plate.upper(),)).fetchone()
+    conn.close()
+    if not t:
+        return jsonify({"error": "No active ticket for this plate",
+                        "lost_ticket_fee": LOST_TICKET}), 404
+    secs, hr = duration(t["entry_time"])
+    return jsonify({"plate": plate.upper(), "entry_time": t["entry_time"],
+                    "slot": t["slot_no"], "duration": hr, "fee": fee(secs)})
+
 @app.route("/api/search/<plate>")
 def api_search(plate):
     return jsonify({"tickets": search(plate)})
