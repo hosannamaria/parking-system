@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kenya Modern Parking System</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+  body { background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 20px; }
+  h1 { text-align: center; color: #38bdf8; margin-bottom: 4px; }
+  .sub { text-align: center; color: #94a3b8; margin-bottom: 20px; font-size: 14px; }
+  .stats { display: flex; gap: 16px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat { background: #1e293b; padding: 12px 24px; border-radius: 10px; font-size: 18px; }
+  .stat b { color: #4ade80; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; max-width: 900px; margin: 0 auto 24px; }
+  .slot { padding: 14px 6px; text-align: center; border-radius: 8px; font-weight: bold; cursor: default; transition: .2s; }
+  .free { background: #14532d; border: 2px solid #22c55e; }
+  .occ  { background: #7f1d1d; border: 2px solid #ef4444; color: #fecaca; }
+  .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; max-width: 1100px; margin: 0 auto; }
+  .card { background: #1e293b; border-radius: 12px; padding: 18px; }
+  .card h2 { font-size: 16px; color: #38bdf8; margin-bottom: 12px; }
+  input, select, button { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 14px; }
+  button { background: #0284c7; border: none; font-weight: bold; cursor: pointer; }
+  button:hover { background: #0369a1; }
+  #log { max-width: 1100px; margin: 16px auto 0; background: #020617; border-radius: 12px; padding: 14px; height: 180px; overflow-y: auto; font-family: monospace; font-size: 13px; }
+  .ok { color: #4ade80; } .err { color: #f87171; } .info { color: #38bdf8; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  td, th { padding: 4px 6px; border-bottom: 1px solid #334155; text-align: left; }
+</style>
+</head>
+<body>
+<h1>&#128661; Modern Parking System - Kenya</h1>
+<div class="sub">Data Structures &amp; Algorithms Project | Flask + SQLite + JavaScript</div>
+
+<div class="stats">
+  <div class="stat">Free Slots: <b id="free">-</b></div>
+  <div class="stat">Occupied: <b id="occ" style="color:#f87171">-</b></div>
+  <div class="stat">Queue: <b id="queue" style="color:#fbbf24">-</b></div>
+</div>
+
+<div id="grid"></div>
+
+<div class="panels">
+  <div class="card">
+    <h2>1. Vehicle Arrival</h2>
+    <input id="a_plate" placeholder="Number plate e.g. KDA 123B">
+    <select id="a_type"><option>Car</option><option>SUV</option><option>Truck</option><option>Boda</option></select>
+    <button onclick="arrive()">Issue Ticket &amp; Open Barrier</button>
+  </div>
+  <div class="card">
+    <h2>2. Vehicle Departure &amp; Payment</h2>
+    <input id="d_plate" placeholder="Number plate">
+    <input id="d_paid" type="number" placeholder="Amount paid (KES)">
+    <select id="d_method"><option>M-Pesa</option><option>Cash</option><option>Card</option></select>
+    <button onclick="depart()">Calculate Fee &amp; Exit</button>
+  </div>
+  <div class="card">
+    <h2>3. Search Records</h2>
+    <input id="s_plate" placeholder="Number plate">
+    <button onclick="search()">Search</button>
+    <div id="search_out"></div>
+  </div>
+  <div class="card">
+    <h2>4. Daily Report</h2>
+    <input id="r_date" type="date">
+    <button onclick="report()">Generate</button>
+    <div id="report_out"></div>
+  </div>
+</div>
+
+<div id="log"></div>
+
+<script>
+function log(msg, cls='info') {
+  const el = document.getElementById('log');
+  el.innerHTML += `<div class="${cls}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+async function refresh() {
+  const r = await fetch('/api/slots'); const d = await r.json();
+  document.getElementById('free').textContent = d.free;
+  document.getElementById('occ').textContent = 40 - d.free;
+  document.getElementById('queue').textContent = d.waiting.length;
+  document.getElementById('grid').innerHTML = d.slots.map(s =>
+    `<div class="slot ${s.occupied ? 'occ' : 'free'}">S${String(s.slot).padStart(2,'0')}<br>${s.occupied ? '&#10060;' : '&#9989;'}</div>`).join('');
+}
+async function arrive() {
+  const plate = document.getElementById('a_plate').value;
+  const r = await fetch('/api/arrival', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({plate, vehicle_type: document.getElementById('a_type').value})});
+  const d = await r.json();
+  if (d.error) { log(d.error, 'err'); return; }
+  d.queued ? log(d.message, 'err') : log(`${plate.toUpperCase()} -> Slot ${d.slot} | ${d.barrier}`, 'ok');
+  refresh();
+}
+async function depart() {
+  const plate = document.getElementById('d_plate').value;
+  const r = await fetch('/api/departure', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({plate, amount_paid: document.getElementById('d_paid').value,
+                          method: document.getElementById('d_method').value})});
+  const d = await r.json();
+  if (d.error) { log(d.error + (d.due ? ` (Due: KES ${d.due})` : ''), 'err'); return; }
+  log(`${d.plate}: ${d.duration} -> KES ${d.fee} | Change KES ${d.change} (${d.method}) | ${d.barrier}`, 'ok');
+  refresh();
+}
+async function search() {
+  const plate = document.getElementById('s_plate').value;
+  const r = await fetch('/api/search/' + encodeURIComponent(plate));
+  const d = await r.json();
+  if (!d.tickets.length) { document.getElementById('search_out').innerHTML = '<p>No records</p>'; return; }
+  document.getElementById('search_out').innerHTML = '<table><tr><th>Plate</th><th>Slot</th><th>Entry</th><th>Exit</th><th>Fee</th><th>Status</th></tr>' +
+    d.tickets.map(t => `<tr><td>${t.plate}</td><td>${t.slot_no}</td><td>${t.entry_time||''}</td><td>${t.exit_time||'-'}</td><td>${t.fee_paid||0}</td><td>${t.status}</td></tr>`).join('') + '</table>';
+}
+async function report() {
+  const date = document.getElementById('r_date').value;
+  const r = await fetch('/api/report/' + date); const d = await r.json();
+  document.getElementById('report_out').innerHTML =
+    `<p>Vehicles: <b>${d.vehicles}</b></p><p>Revenue: <b style="color:#4ade80">KES ${d.revenue}</b></p>`;
+}
+refresh();
+setInterval(refresh, 5000);   // auto-refresh slot grid every 5s
+</script>
+</body>
+</html>
